@@ -11,8 +11,9 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
+#include <sys/ioctl.h>
 #include <termios.h>
+#include <unistd.h>
 
 /*** defines ***/
 
@@ -20,7 +21,14 @@
 
 /*** data ***/
 
-struct termios orig_termios;
+//struct to hold global state of editor
+struct editorConfig {
+    int screenrows;
+    int screencols;
+    struct termios orig_termios;
+};
+
+struct editorConfig E;
 
 /*** terminal ***/
 
@@ -35,7 +43,7 @@ void die(const char *s) {
 }
 
 void disableRawMode() {
-    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios) == -1)
+    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) == -1)
         die("tcsetattr");
 }
 
@@ -44,14 +52,14 @@ void disableRawMode() {
  * Setting read timeout to 1, and minimum read amount to zero bytes, thus making read() non blocking.
  */
 void enableRawMode() { 
-    if (tcgetattr(STDIN_FILENO, &orig_termios) == -1)
+    if (tcgetattr(STDIN_FILENO, &E.orig_termios) == -1)
         die("tcgetattr");
 
     //Set function to call upon exit (any means of exit)
     //This will disable raw mode and restore original termios struct upon exit.
     atexit(disableRawMode);
 
-    struct termios raw = orig_termios;
+    struct termios raw = E.orig_termios;
     //set input flags
     //ICRNL disables input of \n as \r\n
     raw.c_iflag &= ~(ICRNL | IXON | BRKINT | INPCK | ISTRIP);
@@ -87,12 +95,27 @@ char editorReadKey() {
     return c;
 }
 
+/* getWindowSize: query ioctl to TIOCGWINSZ Get WINdow SiZe
+ * On Error: return -1, otherwise 0
+ */
+int getWindowSize(int *rows, int *cols) {
+    struct winsize ws;
+
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
+        return -1;
+    } else {
+        *cols = ws.ws_col;
+        *rows = ws.ws_row;
+        return 0;
+    }
+}
+
 /*** output ***/
 
 /* editorDrawRows() inserts '~' along the left column as in vi
  */
 void editorDrawRows() {
-    for (int y = 0; y < 24; y++) {
+    for (int y = 0; y < E.screenrows; y++) {
         write(STDOUT_FILENO, "~\r\n", 3);
     }
 }
@@ -133,8 +156,17 @@ void editorProcessKeypress() {
 
 /*** init ***/
 
+/* initEditor: init all fields of the editorConfig struct
+ */
+void initEditor() {
+    //get window size
+    if (getWindowSize(&E.screenrows, &E.screencols) == -1)
+        die("getWindowSize");
+}
+
 int main (void) {
     enableRawMode();
+    initEditor();
     
     while (1) {
         editorRefreshScreen();
