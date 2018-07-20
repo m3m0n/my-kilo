@@ -14,6 +14,10 @@
 #include <unistd.h>
 #include <termios.h>
 
+/*** defines ***/
+
+#define CTRL_KEY(k) ((k) & 0x1f)
+
 /*** data ***/
 
 struct termios orig_termios;
@@ -63,7 +67,7 @@ int main (void) {
         else 
             printf("%d ('%c')\r\n", c, c);
         
-        if (c == 'q') 
+        if (c == CTRL_KEY('q')) 
             break;
     }
 
