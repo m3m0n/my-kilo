@@ -101,7 +101,12 @@ char editorReadKey() {
 int getWindowSize(int *rows, int *cols) {
     struct winsize ws;
 
-    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
+    if (1 || ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
+        //ioctl does not work on every system, fall back method to get window size
+        //move cursor 999C (right) and 999B (down). Both are guaranteed to not go offscreen.
+        if (write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12) != 12) 
+            return -1;
+        editorReadKey();
         return -1;
     } else {
         *cols = ws.ws_col;
