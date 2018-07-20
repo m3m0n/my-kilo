@@ -89,6 +89,14 @@ char editorReadKey() {
 
 /*** output ***/
 
+/* editorDrawRows() inserts '~' along the left column as in vi
+ */
+void editorDrawRows() {
+    for (int y = 0; y < 24; y++) {
+        write(STDOUT_FILENO, "~\r\n", 3);
+    }
+}
+
 /* editorRefreshScreen() clears the screen.
  * https://vt100.net/docs/vt100-ug/chapter3.html#ED
  */
@@ -98,6 +106,10 @@ void editorRefreshScreen() {
     write(STDOUT_FILENO, "\x1b[2J", 4);
     //H repositions the cursor with two arguemnts
     //as written is equivalent to '<ESC>[1;1H'
+    write(STDOUT_FILENO, "\x1b[H", 3);
+
+    editorDrawRows();
+
     write(STDOUT_FILENO, "\x1b[H", 3);
 }
 
