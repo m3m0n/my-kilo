@@ -95,22 +95,49 @@ char editorReadKey() {
     return c;
 }
 
+/* getCursorPosition calculates window size when cursor is in bottom left corner
+ */
+int getCursorPosition(int *rows, int *cols) {
+    char buf[32];
+    unsigned int i = 0;
+
+    //issues command to get cursor position
+    if (write(STDOUT_FILENO, "\x1b[6n)", 4) != 4) return -1;
+
+    //Read terminal response as \x1b[posY;posXR
+    while (i < sizeof(buf) -1) {
+        if (read(STDIN_FILENO, &buf[i], 1) != 1) break;
+        if (buf[i] == 'R') break; //Response ends in 'R'
+        i++;
+    }
+    buf[i]='\0';
+
+    if (buf[0] != '\x1b' || buf[1] != '[') return -1;
+    //use sscanf to parse response
+    if (sscanf(&buf[2], "%d;%d", rows, cols) != 2) return -1;
+        printf("cols %d, rows %d\r\n", *cols, *rows);
+        editorReadKey();
+ 
+    return 0;
+}
+
 /* getWindowSize: query ioctl to TIOCGWINSZ Get WINdow SiZe
  * On Error: return -1, otherwise 0
  */
 int getWindowSize(int *rows, int *cols) {
     struct winsize ws;
 
-    if (1 || ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
         //ioctl does not work on every system, fall back method to get window size
         //move cursor 999C (right) and 999B (down). Both are guaranteed to not go offscreen.
         if (write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12) != 12) 
             return -1;
-        editorReadKey();
-        return -1;
+        return getCursorPosition(rows, cols);
     } else {
         *cols = ws.ws_col;
         *rows = ws.ws_row;
+        printf("cols %d, rows %d\r\n", *cols, *rows);
+        editorReadKey();
         return 0;
     }
 }
@@ -121,7 +148,10 @@ int getWindowSize(int *rows, int *cols) {
  */
 void editorDrawRows() {
     for (int y = 0; y < E.screenrows; y++) {
-        write(STDOUT_FILENO, "~\r\n", 3);
+        write(STDOUT_FILENO, "~\r\n", 1);
+
+        if (y < E.screenrows -1) 
+            write(STDOUT_FILENO, "\r\n", 2);
     }
 }
 
