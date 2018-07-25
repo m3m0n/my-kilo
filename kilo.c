@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
@@ -115,8 +116,6 @@ int getCursorPosition(int *rows, int *cols) {
     if (buf[0] != '\x1b' || buf[1] != '[') return -1;
     //use sscanf to parse response
     if (sscanf(&buf[2], "%d;%d", rows, cols) != 2) return -1;
-        printf("cols %d, rows %d\r\n", *cols, *rows);
-        editorReadKey();
  
     return 0;
 }
@@ -136,22 +135,43 @@ int getWindowSize(int *rows, int *cols) {
     } else {
         *cols = ws.ws_col;
         *rows = ws.ws_row;
-        printf("cols %d, rows %d\r\n", *cols, *rows);
-        editorReadKey();
         return 0;
     }
+}
+
+/*** append buffer ***/
+//aquire all text to write to screen and then write all at once
+//This avoids annoying delays and screen flickers
+struct abuf {
+    char *b;
+    int len;
+};
+
+#define ABUF_INIT {NULL, 0}
+
+void abAppend(struct abuf *ab, const char *s, int len) {
+    char *new = realloc(ab->b, ab->len + len);
+
+    if (new == NULL) return;
+    memcpy(&new[ab->len], s, len);
+    ab->b = new;
+    ab->len += len;
+}
+
+void abFree(struct abuf *ab) {
+    free(ab->b);
 }
 
 /*** output ***/
 
 /* editorDrawRows() inserts '~' along the left column as in vi
  */
-void editorDrawRows() {
+void editorDrawRows(struct abuf *ab) {
     for (int y = 0; y < E.screenrows; y++) {
-        write(STDOUT_FILENO, "~\r\n", 1);
+        abAppend(ab, "~", 1);
 
         if (y < E.screenrows -1) 
-            write(STDOUT_FILENO, "\r\n", 2);
+            abAppend(ab, "\r\n", 2);
     }
 }
 
@@ -159,16 +179,27 @@ void editorDrawRows() {
  * https://vt100.net/docs/vt100-ug/chapter3.html#ED
  */
 void editorRefreshScreen() {
+    //to avoid multiple consecutive writes to screen, which increases the chances of choppy reponsiveness, 
+    //write everything to a buffer and then write it to screen all at once
+    struct abuf ab = ABUF_INIT;
+
     //\x1b is the escape character (hex 27). ESC+[ is escape sequence.
+    //h and l commands are the set and reset modes to turn on and off various terminal features
+    //in this case we use it to hide the cursor while we draw the screen and then place it back
+    abAppend(&ab, "\x1b[?25l", 6);
     //J is the VT100 command to clear screen with parameter 2, clear whole screen.
-    write(STDOUT_FILENO, "\x1b[2J", 4);
+    abAppend(&ab, "\x1b[2J", 4);
     //H repositions the cursor with two arguemnts
     //as written is equivalent to '<ESC>[1;1H'
-    write(STDOUT_FILENO, "\x1b[H", 3);
+    abAppend(&ab, "\x1b[H", 3);
 
-    editorDrawRows();
+    editorDrawRows(&ab);
 
-    write(STDOUT_FILENO, "\x1b[H", 3);
+    abAppend(&ab, "\x1b[H", 3); //position cursor @1;1
+    abAppend(&ab, "\x1b[?25h", 6); //reshow the cursor
+
+    write(STDOUT_FILENO, ab.b, ab.len);
+    abFree(&ab);
 }
 
 /*** input ***/
