@@ -7,12 +7,18 @@
 
 /*** includes ***/
 
+//defines get rid of compiler complaint re: implicit def'n of getline
+#define _DEFAULT_SOURCE
+#define _BSD_SOURCE
+#define _GNU_SOURCE
+
 #include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/types.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -36,11 +42,19 @@ enum editorKey {
 
 /*** data ***/
 
+//struct to hold a row of text
+typedef struct erow {
+    int size;
+    char *chars;
+} erow;
+
 //struct to hold global state of editor
 struct editorConfig {
     int cx, cy; //cursor positions
     int screenrows;
     int screencols;
+    int numrows;
+    erow row;
     struct termios orig_termios;
 };
 
@@ -196,6 +210,33 @@ int getWindowSize(int *rows, int *cols) {
     }
 }
 
+/*** file i/o ***/
+
+void editorOpen(char *filename) {
+    FILE *fp = fopen(filename, "r");
+    if (!fp) die("fopen");
+
+    char *line = NULL;
+    size_t linecap = 0;
+    ssize_t linelen;
+    linelen = getline(&line, &linecap, fp);
+
+    if (linelen != -1) {
+        //strip off \r\n at end of line
+        while (linelen > 0 && (line[linelen - 1] == '\n' ||
+                               line[linelen - 1] == '\r'))
+            linelen--;
+
+        E.row.size = linelen;
+        E.row.chars = malloc(linelen+1);
+        memcpy(E.row.chars, line, linelen);
+        E.row.chars[linelen] = '\0';
+        E.numrows =1;
+    }
+    free(line);
+    fclose(fp);
+}
+
 /*** append buffer ***/
 //aquire all text to write to screen and then write all at once
 //This avoids annoying delays and screen flickers
@@ -226,25 +267,32 @@ void abFree(struct abuf *ab) {
 void editorDrawRows(struct abuf *ab) {
     for (int y = 0; y < E.screenrows; y++) {
 
-        if (y == E.screenrows /3) {
-            //Draw welcome message
-            char welcome[80];
-            int welcomeLen = snprintf(welcome, sizeof(welcome), "Kilo Editor -- version %s", KILO_VERSION);
-            //Ensure not to go past end of terminal window
-            if (welcomeLen > E.screencols) welcomeLen = E.screencols;
+        if (y >= E.numrows) {
+            if (E.numrows == 0 && y == E.screenrows /3) {
+                //Draw welcome message
+                char welcome[80];
+                int welcomeLen = snprintf(welcome, sizeof(welcome), "Kilo Editor -- version %s", KILO_VERSION);
+                //Ensure not to go past end of terminal window
+                if (welcomeLen > E.screencols) welcomeLen = E.screencols;
 
-            //Centre welcome message
-            int padding = (E.screencols - welcomeLen) /2;
-            if (padding) {
+                //Centre welcome message
+                int padding = (E.screencols - welcomeLen) /2;
+                if (padding) {
+                    abAppend(ab, "~", 1);
+                    padding--;
+                }
+                while (padding--) abAppend(ab, " ", 1);
+    
+                abAppend(ab, welcome, welcomeLen);
+            } else {
                 abAppend(ab, "~", 1);
-                padding--;
             }
-            while (padding--) abAppend(ab, " ", 1);
-
-            abAppend(ab, welcome, welcomeLen);
         } else {
-            abAppend(ab, "~", 1);
+            int len = E.row.size;
+            if (len > E.screencols) len = E.screencols;
+            abAppend(ab, E.row.chars, len);
         }
+
         abAppend(ab, "\x1b[K", 3); //K commands clears a line, default arg=0, clear line to right of cursor.
         if (y < E.screenrows -1) 
             abAppend(ab, "\r\n", 2);
@@ -348,14 +396,19 @@ void editorProcessKeypress() {
 void initEditor() {
     E.cx=0;
     E.cy=0;
+    E.numrows=0;
+
     //get window size
-    if (getWindowSize(&E.screenrows, &E.screencols) == -1)
-        die("getWindowSize");
+    if (getWindowSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
 }
 
-int main (void) {
+int main (int argc, char *argv[]) {
     enableRawMode();
     initEditor();
+    
+    if (argc >= 2) {
+        editorOpen(argv[1]);
+    }
     
     while (1) {
         editorRefreshScreen();
