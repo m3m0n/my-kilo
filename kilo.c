@@ -373,9 +373,18 @@ void editorDrawRows(struct abuf *ab) {
         }
 
         abAppend(ab, "\x1b[K", 3); //K commands clears a line, default arg=0, clear line to right of cursor.
-        if (y < E.screenrows -1) 
-            abAppend(ab, "\r\n", 2);
+        abAppend(ab, "\r\n", 2);
     }
+}
+
+void editorDrawStatusBar(struct abuf *ab) {
+    abAppend(ab, "\x1b[7m", 4); //<esc>[7m switches terminal to inverted colours
+    int len=0;
+    while (len< E.screencols) {
+        abAppend(ab, " ", 1);
+        len++;
+    }
+    abAppend(ab, "\x1b[m", 3);//<esc>[m switches back to normal formatting
 }
 
 /* editorRefreshScreen() clears the screen.
@@ -399,6 +408,7 @@ void editorRefreshScreen() {
     abAppend(&ab, "\x1b[H", 3);
 
     editorDrawRows(&ab);
+    editorDrawStatusBar(&ab);
 
     //position the cursor in the right place as given in EditorState
     char buf[32];
@@ -509,6 +519,7 @@ void initEditor() {
 
     //get window size
     if (getWindowSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
+    E.screenrows--;
 }
 
 int main (int argc, char *argv[]) {
