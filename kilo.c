@@ -20,6 +20,7 @@
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
 
 /*** defines ***/
@@ -63,6 +64,8 @@ struct editorConfig {
     int numrows;
     erow *row;
     char *filename;
+    char statusmsg[80];
+    time_t statusmsg_time;
     struct termios orig_termios;
 };
 
@@ -391,7 +394,7 @@ void editorDrawStatusBar(struct abuf *ab) {
             E.filename ? E.filename : "[No File]", E.numrows);
     //print current line/total lines (right side)
     int rlen = snprintf(rstatus, sizeof(rstatus), "%d/%d", 
-            E.cy + 1, E.numrows);
+            E.cy + 1, E.numrows); //current line is in cy
 
     if (len > E.screencols) len = E.screencols;
     abAppend(ab, status, len);
@@ -538,6 +541,8 @@ void initEditor() {
     E.numrows=0;
     E.row = NULL;
     E.filename = NULL;
+    E.statusmsg[0] = '\0';
+    E.statusmsg_time = 0;
 
     //get window size
     if (getWindowSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
