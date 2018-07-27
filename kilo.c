@@ -15,6 +15,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -409,6 +410,16 @@ void editorDrawStatusBar(struct abuf *ab) {
         }
     }
     abAppend(ab, "\x1b[m", 3);//<esc>[m switches back to normal formatting
+    abAppend(ab, "\r\n", 2);
+}
+
+void editorDrawMessageBar(struct abuf *ab) {
+    abAppend(ab, "\x1b[K", 3); //clear the line
+    int msglen = strlen(E.statusmsg);
+    if (msglen > E.screencols) msglen = E.screencols;
+    //display message for 5 seconds
+    if (msglen && time(NULL) - E.statusmsg_time < 5)
+        abAppend(ab, E.statusmsg, msglen);
 }
 
 /* editorRefreshScreen() clears the screen.
@@ -433,6 +444,7 @@ void editorRefreshScreen() {
 
     editorDrawRows(&ab);
     editorDrawStatusBar(&ab);
+    editorDrawMessageBar(&ab);
 
     //position the cursor in the right place as given in EditorState
     char buf[32];
@@ -443,6 +455,14 @@ void editorRefreshScreen() {
 
     write(STDOUT_FILENO, ab.b, ab.len);
     abFree(&ab);
+}
+
+void editorSetStatusMessage(const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(E.statusmsg, sizeof(E.statusmsg), fmt, ap);
+    va_end(ap);
+    E.statusmsg_time = time(NULL);
 }
 
 /*** input ***/
@@ -546,7 +566,7 @@ void initEditor() {
 
     //get window size
     if (getWindowSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
-    E.screenrows--;
+    E.screenrows -= 2;
 }
 
 int main (int argc, char *argv[]) {
@@ -556,6 +576,8 @@ int main (int argc, char *argv[]) {
     if (argc >= 2) {
         editorOpen(argv[1]);
     }
+
+    editorSetStatusMessage("HELP: Ctrl-Q to quite");
     
     while (1) {
         editorRefreshScreen();
