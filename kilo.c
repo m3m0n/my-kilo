@@ -51,6 +51,7 @@ typedef struct erow {
 //struct to hold global state of editor
 struct editorConfig {
     int cx, cy; //cursor positions
+    int rowoff; //row offset for scrolling
     int screenrows;
     int screencols;
     int numrows;
@@ -272,12 +273,22 @@ void abFree(struct abuf *ab) {
 
 /*** output ***/
 
+void editorScroll() {
+    if (E.cy < E.rowoff) {
+        E.rowoff = E.cy;
+    }
+    if (E.cy >= E.rowoff + E.screenrows) {
+        E.rowoff = E.cy - E.screenrows + 1;
+    }
+}
+
 /* editorDrawRows() inserts '~' along the left column as in vi
  */
 void editorDrawRows(struct abuf *ab) {
     for (int y = 0; y < E.screenrows; y++) {
+        int filerow = y + E.rowoff;
 
-        if (y >= E.numrows) {
+        if (filerow >= E.numrows) {
             if (E.numrows == 0 && y == E.screenrows /3) {
                 //Draw welcome message
                 char welcome[80];
@@ -298,9 +309,9 @@ void editorDrawRows(struct abuf *ab) {
                 abAppend(ab, "~", 1);
             }
         } else {
-            int len = E.row[y].size;
+            int len = E.row[filerow].size;
             if (len > E.screencols) len = E.screencols;
-            abAppend(ab, E.row[y].chars, len);
+            abAppend(ab, E.row[filerow].chars, len);
         }
 
         abAppend(ab, "\x1b[K", 3); //K commands clears a line, default arg=0, clear line to right of cursor.
@@ -313,6 +324,8 @@ void editorDrawRows(struct abuf *ab) {
  * https://vt100.net/docs/vt100-ug/chapter3.html#ED
  */
 void editorRefreshScreen() {
+    editorScroll();
+
     //to avoid multiple consecutive writes to screen, which increases the chances of choppy reponsiveness, 
     //write everything to a buffer and then write it to screen all at once
     struct abuf ab = ABUF_INIT;
@@ -331,7 +344,7 @@ void editorRefreshScreen() {
 
     //position the cursor in the right place as given in EditorState
     char buf[32];
-    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", E.cy + 1, E.cx + 1);
+    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", E.cy - E.rowoff + 1, E.cx + 1);
     abAppend(&ab, buf, strlen(buf));
 
     abAppend(&ab, "\x1b[?25h", 6); //reshow the cursor
@@ -354,7 +367,7 @@ void editorMoveCursor(int key) {
             if (E.cy != 0) E.cy--;
             break;
         case ARROW_DOWN:
-            if (E.cy != E.screenrows - 1) E.cy++;
+            if (E.cy < E.numrows - 1) E.cy++;
             break;
         }
 }
@@ -406,6 +419,7 @@ void editorProcessKeypress() {
 void initEditor() {
     E.cx=0;
     E.cy=0;
+    E.rowoff=0;
     E.numrows=0;
     E.row = NULL;
 
