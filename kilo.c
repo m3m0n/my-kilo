@@ -43,9 +43,12 @@ enum editorKey {
 /*** data ***/
 
 //struct to hold a row of text
+//rsize and render hold the rendered text, i.e. ti display tabs correctly (using spaces)
 typedef struct erow {
     int size;
+    int rsize;
     char *chars;
+    char *render;
 } erow;
 
 //struct to hold global state of editor
