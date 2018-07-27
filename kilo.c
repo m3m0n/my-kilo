@@ -217,6 +217,21 @@ int getWindowSize(int *rows, int *cols) {
 
 /*** row operations ***/
 
+/* editorUpdateRow takes a row and creates the string that will actually be displayed on screen
+ * This will be used to correctly display tabs as well as other typically non-visible characters
+ */
+void editorUpdateRow(erow *row) {
+    free(row->render);
+    row->render = malloc(row->size +1 );
+
+    int j, idx = 0;
+    for (int j = 0; j < row->size; j++) {
+        row->render[idx++] = row->chars[j];
+    }
+    row->render[idx] = '\0';
+    row->rsize = idx;
+}
+
 void editorAppendRow(char *s, size_t len) {
     E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
     
@@ -226,6 +241,10 @@ void editorAppendRow(char *s, size_t len) {
     E.row[at].chars = malloc(len + 1);
     memcpy(E.row[at].chars, s, len);
     E.row[at].chars[len] = '\0';
+
+    E.row[at].rsize = 0;
+    E.row[at].render = NULL;
+
     E.numrows++;
 }
 
