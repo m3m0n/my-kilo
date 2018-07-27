@@ -224,7 +224,7 @@ void editorUpdateRow(erow *row) {
     free(row->render);
     row->render = malloc(row->size +1 );
 
-    int j, idx = 0;
+    int idx = 0;
     for (int j = 0; j < row->size; j++) {
         row->render[idx++] = row->chars[j];
     }
@@ -244,6 +244,7 @@ void editorAppendRow(char *s, size_t len) {
 
     E.row[at].rsize = 0;
     E.row[at].render = NULL;
+    editorUpdateRow(&E.row[at]);
 
     E.numrows++;
 }
