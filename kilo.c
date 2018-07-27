@@ -25,7 +25,7 @@
 /*** defines ***/
 
 #define KILO_VERSION "0.0.1"
-#define KILO_TAB_STOP 8
+#define KILO_TAB_STOP 4
 
 #define CTRL_KEY(k) ((k) & 0x1f)
 
@@ -55,6 +55,7 @@ typedef struct erow {
 //struct to hold global state of editor
 struct editorConfig {
     int cx, cy; //cursor positions
+    int rx;     //cursor position within rendered row
     int rowoff; //row offset for scrolling
     int coloff;
     int screenrows;
@@ -218,6 +219,17 @@ int getWindowSize(int *rows, int *cols) {
 
 /*** row operations ***/
 
+int editorRowCxToRx(erow *row, int cx) {
+    int rx = 0;
+    
+    for (int j = 0; j < cx; j++) {
+        if (row->chars[j] == '\t')
+            rx += (KILO_TAB_STOP -1) - (rx % KILO_TAB_STOP);
+        rx++;
+    }
+    return rx;
+}
+
 /* editorUpdateRow takes a row and creates the string that will actually be displayed on screen
  * This will be used to correctly display tabs as well as other typically non-visible characters
  */
@@ -309,17 +321,21 @@ void abFree(struct abuf *ab) {
 /*** output ***/
 
 void editorScroll() {
+    E.rx = 0;
+    if (E.cy < E.numrows) 
+        E.rx = editorRowCxToRx(&E.row[E.cy], E.cx);
+
     if (E.cy < E.rowoff) {
         E.rowoff = E.cy;
     }
     if (E.cy >= E.rowoff + E.screenrows) {
         E.rowoff = E.cy - E.screenrows + 1;
     }
-    if (E.cx < E.coloff) {
-        E.coloff = E.cx;
+    if (E.rx < E.coloff) {
+        E.coloff = E.rx;
     }
-    if (E.cx >= E.coloff + E.screencols) {
-        E.coloff = E.cx - E.screencols + 1;
+    if (E.rx >= E.coloff + E.screencols) {
+        E.coloff = E.rx - E.screencols + 1;
     }
 }
 
@@ -386,7 +402,7 @@ void editorRefreshScreen() {
 
     //position the cursor in the right place as given in EditorState
     char buf[32];
-    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", E.cy - E.rowoff + 1, E.cx - E.coloff + 1);
+    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", E.cy - E.rowoff + 1, E.rx - E.coloff + 1);
     abAppend(&ab, buf, strlen(buf));
 
     abAppend(&ab, "\x1b[?25h", 6); //reshow the cursor
@@ -477,6 +493,7 @@ void editorProcessKeypress() {
 void initEditor() {
     E.cx=0;
     E.cy=0;
+    E.rx=0;
     E.rowoff=0;
     E.coloff=0;
     E.numrows=0;
