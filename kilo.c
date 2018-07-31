@@ -32,6 +32,7 @@
 #define CTRL_KEY(k) ((k) & 0x1f)
 
 enum editorKey {
+    BACKSPACE = 127,
     ARROW_LEFT = 1000, //move out of char range so as to not overlap with characters
     ARROW_RIGHT ,
     ARROW_UP ,
@@ -527,6 +528,10 @@ void editorProcessKeypress() {
     int c = editorReadKey();
 
     switch(c) {
+        case '\r':
+            /* TODO */
+            break;
+
         case CTRL_KEY('q'):
             //clear screen on exit
             write(STDOUT_FILENO, "\x1b[2J",4);
@@ -565,6 +570,20 @@ void editorProcessKeypress() {
                 E.cx = E.row[E.cy].size;
             break;
         
+        //ctrl(h) sends control code 8 which is original bksp.
+        //today delete key sends <esc>[3~ and bksp is 127 (DEL)
+        case BACKSPACE:
+        case CTRL_KEY('h'):
+        case DEL_KEY:
+            /* TODO */
+            break;
+        
+        //ctrl(l) traditionally to refresh screen. uncessesary as refresh on every keypress
+        //esc used to ignore all other keys as editorReadKey returns esc on unhandled escape seq.
+        case CTRL_KEY('l'):
+        case '\x1b':
+            break;
+
         default:
             editorInsertChar(c);
             break;
