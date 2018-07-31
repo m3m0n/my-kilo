@@ -164,7 +164,7 @@ int editorReadKey() {
                     case 'C': return ARROW_RIGHT;
                     case 'D': return ARROW_LEFT;
                     case 'H': return HOME_KEY;
-                    case 'f': return END_KEY;
+                    case 'F': return END_KEY;
                 }
             }
         } else if (seq[0] =='O') {
@@ -565,6 +565,10 @@ void editorProcessKeypress() {
                 E.cx = E.row[E.cy].size;
             break;
         
+        default:
+            editorInsertChar(c);
+            break;
+
     }
 }
 
